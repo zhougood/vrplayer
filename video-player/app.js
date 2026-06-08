@@ -67,6 +67,7 @@
   let vrVideoYawOffset = 0;
   let vrVideoPitchOffset = 0;
   let vrVideoZoom = 1;
+  let vrPanelTimeout = null;
 
   const VR_PANEL_SIZE = { width: 1024, height: 256 };
   const VR_PROGRESS = { x: 390, y: 140, width: 430, height: 12, hitPaddingX: 24, hitPaddingY: 24 };
@@ -325,8 +326,8 @@
       const panelGeom = new THREE.PlaneGeometry(1.2, 0.3);
       const panelMat = new THREE.MeshBasicMaterial({ map: vrPanelTexture, transparent: true, side: THREE.DoubleSide });
       vrPanelMesh = new THREE.Mesh(panelGeom, panelMat);
-      vrPanelMesh.position.set(0, -0.6, -1.8);
-      vrPanelMesh.rotation.x = -Math.PI / 10;
+      vrPanelMesh.position.set(0, -0.35, -1.8);
+      vrPanelMesh.rotation.x = -Math.PI / 12;
       scene.add(vrPanelMesh);
       vrPanelMesh.visible = false; // Hidden on desktop
 
@@ -386,8 +387,19 @@
   }
 
   // ═══════════════════════════════════════════════════
-  //  WEBXR VR BUTTON
+  //  WEBXR VR BUTTON & PANEL
   // ═══════════════════════════════════════════════════
+
+  function showVRPanel() {
+    if (!vrPanelMesh) return;
+    vrPanelMesh.visible = true;
+    if (vrPanelTimeout) clearTimeout(vrPanelTimeout);
+    vrPanelTimeout = setTimeout(() => {
+      if (vrPanelMesh && video && !video.paused) {
+        vrPanelMesh.visible = false;
+      }
+    }, 3000);
+  }
 
   async function setupVRButton() {
     let supported = false;
@@ -511,15 +523,22 @@
             return;
           }
 
+          if (vrPanelMesh && !vrPanelMesh.visible) {
+            showVRPanel();
+            return; // Just show the panel, don't trigger play/pause
+          }
+
           const panelPoint = getPanelPointForInputSource(e.inputSource);
           if (panelPoint) {
             handlePanelClick(panelPoint.x, panelPoint.y);
+            showVRPanel(); // Keep panel alive
             drawVRPanel(); // Redraw UI state immediately
             return; // Don't trigger standard play/pause toggle if we clicked the panel
           }
 
           // Fallback: click gesture triggers play/pause
           togglePlay();
+          showVRPanel(); // Keep panel alive or show it if video pauses
         });
 
         session.addEventListener('end', () => {
@@ -535,6 +554,10 @@
           vrViewDragHadMovement = false;
           suppressSelectInputSource = null;
           // Hide VR UI panel
+          if (vrPanelTimeout) {
+            clearTimeout(vrPanelTimeout);
+            vrPanelTimeout = null;
+          }
           if (vrPanelMesh) vrPanelMesh.visible = false;
           // Restore camera to mono desktop mode (layer 0 + 1)
           camera.layers.set(0);
@@ -550,12 +573,12 @@
         applyVideoSphereOrientation();
         applyVideoTextureView();
         if (vrPanelMesh) {
-          vrPanelMesh.visible = true;
           // Position the panel in front of the viewer orientation upon start
           const tempEuler = new THREE.Euler(0, camera.rotation.y, 0, 'YXZ');
-          vrPanelMesh.position.set(0, -0.6, -1.8).applyEuler(tempEuler);
-          vrPanelMesh.rotation.set(-Math.PI / 10, camera.rotation.y, 0, 'YXZ');
+          vrPanelMesh.position.set(0, -0.35, -1.8).applyEuler(tempEuler);
+          vrPanelMesh.rotation.set(-Math.PI / 12, camera.rotation.y, 0, 'YXZ');
           drawVRPanel();
+          showVRPanel();
         }
         vrBtn.classList.add('vr-active');
         console.log('VR session started.');
@@ -680,6 +703,7 @@
         canThumbstickSeek = false;
         const direction = stickX > 0 ? 1 : -1;
         video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + (direction * 10)));
+        showVRPanel(); // Keep panel alive while seeking
         setTimeout(() => { canThumbstickSeek = true; }, 800); // 800ms debounce
       }
     } else {
@@ -694,6 +718,7 @@
       if (Math.abs(nextZoom - vrVideoZoom) > 0.0001) {
         vrVideoZoom = nextZoom;
         applyVideoTextureView();
+        showVRPanel(); // Keep panel alive while zooming
       }
     }
   }
@@ -1261,7 +1286,7 @@
     const deltaYaw = normalizeAngleDelta(angles.yaw - vrViewDragStartAngles.yaw);
     const deltaPitch = angles.pitch - vrViewDragStartAngles.pitch;
 
-    vrVideoYawOffset = Math.max(-90, Math.min(90, vrViewDragStartOffset.yaw + deltaYaw * VR_DRAG_SPEED));
+    vrVideoYawOffset = Math.max(-90, Math.min(90, vrViewDragStartOffset.yaw - deltaYaw * VR_DRAG_SPEED));
     vrVideoPitchOffset = Math.max(-65, Math.min(65, vrViewDragStartOffset.pitch - deltaPitch * VR_DRAG_SPEED));
 
     if (Math.abs(deltaYaw) > VR_DRAG_MOVE_THRESHOLD || Math.abs(deltaPitch) > VR_DRAG_MOVE_THRESHOLD) {
