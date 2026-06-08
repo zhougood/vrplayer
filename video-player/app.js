@@ -697,8 +697,10 @@
       }
     }
 
+    const isHorizontalDominant = Math.abs(stickX) > Math.abs(stickY);
+
     // Handle Thumbstick Seek (X axis)
-    if (Math.abs(stickX) > 0.5) {
+    if (isHorizontalDominant && Math.abs(stickX) > 0.5) {
       if (canThumbstickSeek) {
         canThumbstickSeek = false;
         const direction = stickX > 0 ? 1 : -1;
@@ -712,8 +714,8 @@
       }
     }
 
-    // Handle Thumbstick Zoom (Y axis). Up zooms in, down zooms out.
-    if (Math.abs(stickY) > 0.25) {
+    // Handle Thumbstick Zoom (Y axis). Up zooms out, down zooms in.
+    if (!isHorizontalDominant && Math.abs(stickY) > 0.25) {
       const nextZoom = Math.max(VR_MIN_ZOOM, Math.min(VR_MAX_ZOOM, vrVideoZoom - stickY * VR_ZOOM_SPEED));
       if (Math.abs(nextZoom - vrVideoZoom) > 0.0001) {
         vrVideoZoom = nextZoom;
