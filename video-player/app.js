@@ -42,7 +42,7 @@
   const DRAG_SPEED = 0.2;
   const VR_DRAG_SPEED = 1.15;
   const VR_ZOOM_SPEED = 0.025;
-  const VR_MIN_ZOOM = 1;
+  const VR_MIN_ZOOM = 0.2; // Allow pulling closer than default
   const VR_MAX_ZOOM = 3;
   const VR_DRAG_MOVE_THRESHOLD = 1.5;
   let lookTarget;
@@ -251,15 +251,27 @@
   function applyVideoTextureView(texture = null) {
     const textures = texture ? [texture] : [videoTexture, videoTextureRight].filter(Boolean);
     const zoom = Math.max(VR_MIN_ZOOM, Math.min(VR_MAX_ZOOM, isInVR ? vrVideoZoom : 1));
-    const repeatX = 0.5 / zoom;
-    const repeatY = 1 / zoom;
-    const insetX = (0.5 - repeatX) / 2;
-    const insetY = (1 - repeatY) / 2;
+    
+    // Instead of scaling the sphere or changing texture repeat, we TRANSLATE the sphere along the Z-axis.
+    // Moving the sphere further away (negative Z offset) decreases its angular FOV, acting as a "zoom out" and moving it away.
+    // Moving it closer (positive Z offset) increases its angular FOV, acting as a "zoom in" and pulling it closer to the face.
+    const radius = 500;
+    const zOffset = -radius * (zoom - 1);
+    
+    if (typeof sphereLeft !== 'undefined' && sphereLeft) {
+      sphereLeft.scale.set(1, 1, 1);
+      sphereLeft.position.set(0, 0, zOffset);
+    }
+    if (typeof sphereRight !== 'undefined' && sphereRight) {
+      sphereRight.scale.set(1, 1, 1);
+      sphereRight.position.set(0, 0, zOffset);
+    }
 
     textures.forEach((tex) => {
       const sbsOffsetX = tex.userData.sbsOffsetX || 0;
-      tex.repeat.set(repeatX, repeatY);
-      tex.offset.set(sbsOffsetX + insetX, insetY);
+      // Keep texture mapping full to avoid distortion
+      tex.repeat.set(0.5, 1);
+      tex.offset.set(sbsOffsetX, 0);
       tex.needsUpdate = true;
     });
   }
@@ -284,7 +296,7 @@
       scene.background = new THREE.Color(0x111118);
 
       // Camera — 75° FOV for a comfortable default view
-      camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1100);
+      camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 5000);
       camera.position.set(0, 0, 0);
 
       // Initialize lookTarget
