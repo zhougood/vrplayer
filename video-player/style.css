@@ -676,6 +676,78 @@ body {
   margin-top: 28px;
 }
 
+/* ──────────────────── Playback History ──────────────────── */
+.history {
+  width: 100%;
+  max-width: 520px;
+  margin-top: 28px;
+  text-align: left;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.history-header h2 {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.clear-history-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.clear-history-btn:hover { color: var(--accent); }
+
+.empty-history {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  padding: 12px 0;
+}
+
+.history-list {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  max-height: 190px;
+  overflow-y: auto;
+}
+
+.history-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.history-item:hover {
+  background: rgba(139, 92, 246, 0.09);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.history-play-icon { color: var(--accent); font-size: 0.72rem; }
+.history-item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.84rem; }
+.history-item-source { color: var(--text-muted); font-size: 0.7rem; }
+
 .url-divider {
   display: flex;
   align-items: center;

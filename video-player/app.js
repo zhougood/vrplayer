@@ -32,6 +32,14 @@
   const playerWrapper = document.getElementById('playerWrapper');
   const videoUrlInput = document.getElementById('videoUrlInput');
   const playUrlBtn = document.getElementById('playUrlBtn');
+  const backToLibraryBtn = document.getElementById('backToLibraryBtn');
+  const historyList = document.getElementById('historyList');
+  const emptyHistory = document.getElementById('emptyHistory');
+  const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+  const HISTORY_STORAGE_KEY = 'vr-video-player-history';
+  const MAX_HISTORY_ITEMS = 12;
+  const sessionHistory = new Map();
 
   // ─── Three.js State ───
   let scene, camera, renderer, videoTexture, videoTextureRight;
@@ -108,7 +116,7 @@
     e.stopPropagation();
     const url = videoUrlInput.value.trim();
     if (url) {
-      playVideoSource(url, url.split('/').pop());
+      playVideoSource(url, getVideoName(url));
     }
   });
 
@@ -117,7 +125,7 @@
     if (e.key === 'Enter') {
       const url = videoUrlInput.value.trim();
       if (url) {
-        playVideoSource(url, url.split('/').pop());
+        playVideoSource(url, getVideoName(url));
       }
     }
   });
@@ -170,6 +178,28 @@
     fileInput.click();
   });
 
+  backToLibraryBtn.addEventListener('click', returnToLibrary);
+
+  historyList.addEventListener('click', (e) => {
+    const historyButton = e.target.closest('[data-history-id]');
+    if (!historyButton) return;
+
+    e.stopPropagation();
+    const item = sessionHistory.get(historyButton.dataset.historyId);
+    if (item) playVideoSource(item.url, item.name);
+  });
+
+  clearHistoryBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sessionHistory.clear();
+    try {
+      localStorage.removeItem(HISTORY_STORAGE_KEY);
+    } catch {
+      // Playback history remains available for this session when storage is disabled.
+    }
+    renderHistory();
+  });
+
   // ═══════════════════════════════════════════════════
   //  LOAD VIDEO SOURCE
   // ═══════════════════════════════════════════════════
@@ -190,9 +220,11 @@
     }
 
     video.src = url;
-    videoName.textContent = name || url.split('/').pop() || 'Remote Video';
+    const displayName = name || getVideoName(url);
+    videoName.textContent = displayName;
     dropZone.classList.add('hidden');
     playerContainer.classList.remove('hidden');
+    addToHistory(url, displayName);
 
     // Reset view direction
     lon = 0;
@@ -229,6 +261,81 @@
     }, { once: true });
 
     video.play().catch(() => {});
+  }
+
+  function returnToLibrary() {
+    video.pause();
+    if (activeXRSession) activeXRSession.end().catch(() => {});
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      (document.exitFullscreen?.() || document.webkitExitFullscreen?.()).catch?.(() => {});
+    }
+    playerContainer.classList.add('hidden');
+    dropZone.classList.remove('hidden');
+    renderHistory();
+  }
+
+  function getVideoName(url) {
+    const lastPathPart = url.split('/').pop()?.split('?')[0];
+    try {
+      return decodeURIComponent(lastPathPart || 'Remote Video');
+    } catch {
+      return lastPathPart || 'Remote Video';
+    }
+  }
+
+  function addToHistory(url, name) {
+    const isLocal = url.startsWith('blob:');
+    const id = `${isLocal ? 'local' : 'url'}:${url}`;
+    sessionHistory.delete(id);
+    sessionHistory.set(id, { id, url, name, isLocal, playedAt: Date.now() });
+
+    if (!isLocal) {
+      const stored = getStoredHistory().filter((item) => item.id !== id);
+      stored.unshift({ id, url, name, isLocal: false, playedAt: Date.now() });
+      try {
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(stored.slice(0, MAX_HISTORY_ITEMS)));
+      } catch {
+        // Storage can be unavailable in private or restricted browser contexts.
+      }
+    }
+    renderHistory();
+  }
+
+  function getStoredHistory() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(HISTORY_STORAGE_KEY) || '[]');
+      return Array.isArray(stored)
+        ? stored.filter((item) => item?.id && item.url && item.name).map((item) => ({ ...item, playedAt: Number(item.playedAt) || 0 }))
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function renderHistory() {
+    const storedItems = getStoredHistory();
+    storedItems.forEach((item) => {
+      if (!sessionHistory.has(item.id)) sessionHistory.set(item.id, item);
+    });
+    const items = [...sessionHistory.values()]
+      .sort((a, b) => b.playedAt - a.playedAt)
+      .slice(0, MAX_HISTORY_ITEMS);
+
+    historyList.innerHTML = items.map((item) => `
+      <li>
+        <button class="history-item" type="button" data-history-id="${escapeHtml(item.id)}" title="Play ${escapeHtml(item.name)}">
+          <span class="history-play-icon" aria-hidden="true">▶</span>
+          <span class="history-item-name">${escapeHtml(item.name)}</span>
+          <span class="history-item-source">${item.isLocal ? 'This session' : 'URL'}</span>
+        </button>
+      </li>
+    `).join('');
+    emptyHistory.classList.toggle('hidden', items.length > 0);
+    clearHistoryBtn.classList.toggle('hidden', items.length === 0);
+  }
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[char]);
   }
 
   // ═══════════════════════════════════════════════════
@@ -1022,9 +1129,7 @@
       + `</div>`;
 
     document.getElementById('errorBackBtn')?.addEventListener('click', () => {
-      playerContainer.classList.add('hidden');
-      dropZone.classList.remove('hidden');
-      video.src = '';
+      returnToLibrary();
     });
   });
 
@@ -1140,6 +1245,12 @@
         e.preventDefault();
         resetView();
         break;
+      case 'Escape':
+        if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+          e.preventDefault();
+          returnToLibrary();
+        }
+        break;
     }
   });
 
@@ -1163,8 +1274,10 @@
   const videoUrl = urlParams.get('video') || urlParams.get('url');
   if (videoUrl) {
     const decodedUrl = decodeURIComponent(videoUrl);
-    playVideoSource(decodedUrl, decodedUrl.split('/').pop());
+    playVideoSource(decodedUrl, getVideoName(decodedUrl));
   }
+
+  renderHistory();
 
   // ═══════════════════════════════════════════════════
   //  VR 3D PANEL DRAWING & INTERACTION
