@@ -1,5 +1,6 @@
 (() => {
   // ─── DOM Elements ───
+  const logo = document.getElementById('logo');
   const dropZone = document.getElementById('dropZone');
   const fileInput = document.getElementById('fileInput');
   const browseBtn = document.getElementById('browseBtn');
@@ -92,6 +93,13 @@
   let pointerDownPos = null;
   let controlsTimeout;
   let isSeeking = false;
+
+  // ═══════════════════════════════════════════════════
+  //  WEB PAGE CONTROL
+  // ═══════════════════════════════════════════════════
+  
+  logo.addEventListener('click', returnToLibrary);
+
 
   // ═══════════════════════════════════════════════════
   //  FILE SELECTION

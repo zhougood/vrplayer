@@ -92,6 +92,9 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
 }
 
 .logo-icon {
